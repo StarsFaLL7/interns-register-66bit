@@ -1,0 +1,13 @@
+.search-input {
+    color: var(--text-color);
+    padding: 8px 32px 8px 16px;
+    font-size: 16px;
+    font-family: 'Montserrat', sans-serif;
+    position: relative;
+    border-radius: 8px;
+    border: var(--text-color) solid 1px;
+    box-sizing: border-box;
+    background-image: url("images/icon-search-16px.svg");
+    background-position: center right 8px;
+    background-repeat: no-repeat;
+}

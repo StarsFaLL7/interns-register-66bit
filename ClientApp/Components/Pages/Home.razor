@@ -1,0 +1,15 @@
+﻿@page "/"
+
+<PageTitle>Учет стажеров</PageTitle>
+
+<h1>Добро пожаловать в систему</h1>
+
+Выполняется переадресация...
+
+@code
+{
+    protected override void OnInitialized()
+    {
+        NavigationManager.NavigateTo("/add-intern", true, true);
+    }
+}

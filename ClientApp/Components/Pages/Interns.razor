@@ -1,0 +1,52 @@
+﻿@page "/interns"
+@using ClientApp.Components.SmallComponents
+@using ClientApp.Components.TableView
+@using ClientApp.Models
+@using ClientApp.Services.Interfaces
+@using ClientApp.Components.QuestionPopup
+@using ClientApp.Services.ServiceModels
+@using ClientApp.Components.Popups
+@using UILayer.Enums
+@inject IItemService<Intern> InternService
+
+<EditInternPopup @ref="_editInternPopup" OnSaveAction="EditPopupSaved"/>
+<QuestionPopup  @ref="_popup"/>
+<div class="container">
+    <div class="row row-cols-auto">
+        <div class="col">
+            <h1>Просмотр списка стажеров</h1>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col col-auto">
+            <SearchInputComponent Width="250px" Placeholder="Поиск..." OnInput="Search" @ref="_searchInput"/>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <TableView T="Intern" @ref="_tableView"
+                       AddDeleteButton="true"
+                       DeleteButtonClickedCallback="DeleteInternBtnClicked"
+                       AddEditButton="true"
+                       EditButtonClickedCallback="EditInternBtnClicked" ReloadRequested="ReloadTableDataAsync"
+                       SortingOptions="_internSortingOptions"/>
+        </div>
+    </div>
+    
+</div>
+
+@code {
+    private TableView<Intern> _tableView = null!;
+    private QuestionPopup _popup = null!;
+    private SearchInputComponent _searchInput = null!;
+    private EditInternPopup _editInternPopup = null!;
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ReloadTableDataAsync(true);
+        }
+    }
+}

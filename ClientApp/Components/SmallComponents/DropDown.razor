@@ -1,0 +1,127 @@
+﻿@typeparam T
+
+<div class="dd">
+    @if (!string.IsNullOrWhiteSpace(Title))
+    {
+        <label for="@(_guid.ToString())" class="form-label">@Title</label>
+    }
+    <select class="form-select" style="@GetStyleForSelect()" disabled="@IsReadOnly" id="@(_guid.ToString())" @onchange="ValueChanged">
+        @if (AddEmptyVariant)
+        {
+            if (IsSelected(default))
+            {
+                <option value="" selected>Не выбрано</option>
+            }
+            else
+            {
+                <option value="">Не выбрано</option>
+            }
+        }
+        @foreach (var itemPair in _itemsDict)
+        {
+            if (IsSelected(itemPair.Value))
+            {
+                @if (CustomToStringFormat is not null)
+                {
+                    <option value="@itemPair.Key" selected>@CustomToStringFormat(itemPair.Value)</option>
+                }
+                else
+                {
+                    <option value="@itemPair.Key" selected>@itemPair.Value?.ToString()</option>
+                }
+            }
+            else
+            {
+                @if (CustomToStringFormat is not null)
+                {
+                    <option value="@itemPair.Key">@CustomToStringFormat(itemPair.Value)</option>
+                }
+                else
+                {
+                    <option value="@itemPair.Key">@itemPair.Value?.ToString()</option>
+                }
+            }
+        }
+    </select>
+</div>
+
+@code
+{
+    [Parameter] public bool AddEmptyVariant { get; set; }
+    [Parameter] public bool IsReadOnly { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public Action<T?>? SelectionChangedAction { get; set; }
+    [Parameter] public Func<T, string>? CustomToStringFormat { get; set; }
+    [Parameter] public bool IsAutoWidth { get; set; }
+    [Parameter] [EditorRequired] public List<T> Items { get; set; } = [];
+    
+    public T? SelectedItem { get; private set; }
+    
+    private readonly Guid _guid = Guid.NewGuid();
+    private Dictionary<Guid, T> _itemsDict = [];
+    
+    protected override void OnInitialized()
+    {
+        _itemsDict = Items.Where(i => i is not null).ToDictionary(_ => Guid.NewGuid(), i => i);
+    }
+
+    private string GetStyleForSelect()
+    {
+        return IsAutoWidth ? "width: auto" : "";
+    }
+    
+    public void AddItem(T item)
+    {
+        Items.Add(item);
+        _itemsDict.Add(Guid.NewGuid(), item);
+        StateHasChanged();
+    }
+    
+    public void AddItemRange(IEnumerable<T> items)
+    {
+        foreach (var item in items)
+        {
+            Items.Add(item);
+            _itemsDict.Add(Guid.NewGuid(), item);
+        }
+        
+        StateHasChanged();
+    }
+
+    private bool IsSelected(T? item)
+    {
+        if (item is null)
+        {
+            return SelectedItem is null;
+        }
+        return item.Equals(SelectedItem);
+    }
+
+    public void SelectItem(T? item, bool triggerEvent = false)
+    {
+        if (_itemsDict.Values.Contains(item) || 
+            (default(T) == null && item == null && AddEmptyVariant))
+        {
+            SelectedItem = item;
+            if (triggerEvent)
+            {
+                SelectionChangedAction?.Invoke(item);
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private void ValueChanged(ChangeEventArgs arg)
+    {
+        if (Guid.TryParse(arg.Value?.ToString(), out var guid) && 
+            _itemsDict.TryGetValue(guid, out var item))
+        {
+            SelectionChangedAction?.Invoke(item);
+            SelectedItem = item;
+            return;
+        }
+        SelectionChangedAction?.Invoke(default);
+        SelectedItem = default;
+    }
+}

@@ -1,0 +1,245 @@
+﻿@using System.Reflection
+@using ClientApp.Components.SmallComponents
+@using ClientApp.Components.SmallComponents.Utility
+@using ClientApp.Models
+@using ClientApp.Services.Interfaces
+@using ClientApp.Services.ServiceModels
+@using ClientApp.Utils
+
+@inject IItemService<ProbationCourse> CourseService
+@inject IItemService<ProbationProject> ProjectService
+@inject IItemService<Intern> InternService
+
+<div class="modal fade show" id="staticBackdrop" style="display: @(IsVisible ? "block" : "none")" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+     aria-labelledby="staticBackdropLabel" aria-modal="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5">Редактирование стажера</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" @onclick="Hide"></button>
+            </div>
+
+            <div class="modal-body">
+                <form class="container g-3 needs-validation" novalidate>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label for="lastNameInput" class="form-label">Фамилия <span class="text-danger">*</span></label>
+                            <input @bind="_editingModel.LastName"
+                                   class="form-control @ValidationHelper.ValidateStringNullOrWhitespace(_editingModel.LastName, _isShouldValidate)"
+                                   id="lastNameInput" placeholder="Иванов" required>
+                            <div class="invalid-feedback">
+                                Пожалуйста, укажите фамилию стажера.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col col-8">
+                            <label for="firstNameInput" class="form-label">Имя <span class="text-danger">*</span></label>
+                            <input @bind="_editingModel.FirstName"
+                                   class="form-control @ValidationHelper.ValidateStringNullOrWhitespace(_editingModel.FirstName, _isShouldValidate)"
+                                   id="firstNameInput" placeholder="Олег" required>
+                            <div class="invalid-feedback">
+                                Пожалуйста, укажите имя стажера.
+                            </div>
+                        </div>
+                        <div class="col col-4">
+                            <DropDown Items="[true, false]" Title="Пол" AddEmptyVariant="false"
+                                      CustomToStringFormat="_genderToStringFormat"
+                                      SelectionChangedAction="GenderSelectionChanged" @ref="_ddGenderSelect"/>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label for="emailInput" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control @ValidationHelper.ValidateEmail(_editingModel.Email, _isShouldValidate)"
+                                   id="emailInput" placeholder="example@mail.com" @bind="_editingModel.Email">
+                            <div class="invalid-feedback">
+                                Пожалуйста, укажите корректный email стажера.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label for="phoneInput" class="form-label">Телефон</label>
+                            <input type="text" class="form-control @ValidationHelper.ValidatePhone(_editingModel.Phone!, _isShouldValidate, true)"
+                                   id="phoneInput" placeholder="+79876543210" @bind="_editingModel.Phone">
+                            <div class="invalid-feedback">
+                                Пожалуйста, укажите корректный номер телефона. Номер должен начинаться с +7.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label for="dateInput" class="form-label">Дата рождения <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control @ValidationHelper.ValidateDateInBetween(_editingModel.BirthDate,
+                            new DateTime(1900, 1, 1), DateTime.Today.AddDays(-1), _isShouldValidate)"
+                                   id="dateInput" placeholder="01.01.2000" @bind="_editingModel.BirthDate">
+                            <div class="invalid-feedback">
+                                Пожалуйста, укажите корректную дату рождения.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <DropDown Items="_allCourses" Title="Направление стажировки" AddEmptyVariant="true" CustomToStringFormat="c => c.Title"
+                                      SelectionChangedAction="CourseSelectionChanged" @ref="_ddCourseSelect"/>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <DropDown Items="_allProjects" Title="Текущий проект" AddEmptyVariant="true" CustomToStringFormat="c => c.Title"
+                                      SelectionChangedAction="ProjectSelectionChanged" @ref="_ddProjectSelect"/>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" @onclick="Hide">Отмена</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveInfo">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] 
+    public Func<Intern, Task>? OnSaveAction { get; set; }
+    
+    private DropDown<ProbationCourse> _ddCourseSelect = null!;
+    private DropDown<ProbationProject> _ddProjectSelect = null!;
+    private DropDown<bool> _ddGenderSelect = null!;
+    private readonly Func<bool, string> _genderToStringFormat = b => b ? "Муж." : "Жен.";
+    private bool _isShouldValidate;
+    
+    private PropertyInfo[] _writableProperties = [];
+    private Intern _editingModel = new();
+    private List<ProbationProject> _allProjects = [];
+    private List<ProbationCourse> _allCourses = [];
+    
+    public Intern ExistingIntern { get; set; } = null!;
+    public bool IsVisible { get; private set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _writableProperties = typeof(Intern).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite).ToArray();
+        
+        var allProjectsResult = await ProjectService.GetAllAsync();
+        _ddProjectSelect.AddItemRange(allProjectsResult.Item ?? []);
+        
+        var allCoursesResult = await CourseService.GetAllAsync();
+        _ddCourseSelect.AddItemRange(allCoursesResult.Item ?? []);
+    }
+
+    private void GenderSelectionChanged(bool obj)
+    {
+        _editingModel.IsMale = obj;
+    }
+    
+    private async Task SaveInfo()
+    {
+        _isShouldValidate = true;
+        if (!ValidateFields())
+        {
+            return;
+        }
+        CopyIntern(_editingModel, ExistingIntern);
+        var saveRes = await InternService.SaveAsync(ExistingIntern);
+        if (saveRes.Completed)
+        {
+            _isShouldValidate = false;
+        }
+        if (saveRes.Completed)
+        {
+            Hide();
+            OnSaveAction?.Invoke(ExistingIntern);
+        }
+    }
+
+    private bool ValidateFields()
+    {
+        if (string.IsNullOrWhiteSpace(_editingModel.FirstName) ||
+            string.IsNullOrWhiteSpace(_editingModel.LastName) ||
+            ValidationHelper.ValidatePhone(_editingModel.Phone!, true, true) == "is-invalid" ||
+            ValidationHelper.ValidateEmail(_editingModel.Email, true) == "is-invalid" ||
+            ValidationHelper.ValidateDateInBetween(_editingModel.BirthDate, new DateTime(1900, 1, 1),
+                DateTime.Today) == "is-invalid")
+        {
+            return false;
+        }
+
+        return true;
+    }
+    
+    public Task ShowAsync(Intern intern)
+    {
+        _isShouldValidate = false;
+        ExistingIntern = intern;
+        _editingModel = new Intern();
+        CopyIntern(ExistingIntern, _editingModel);
+        _ddGenderSelect.SelectItem(ExistingIntern.IsMale);
+        if (intern.ProbationProject != null)
+        {
+            _ddProjectSelect.SelectItem(_allProjects.First(p => p.Id == intern.ProbationProject.Id));
+        }
+        else
+        {
+            _ddProjectSelect.SelectItem(null);
+        }
+        if (intern.ProbationCourse != null)
+        {
+            _ddCourseSelect.SelectItem(_allCourses.First(p => p.Id == intern.ProbationCourse.Id));
+        }
+        else
+        {
+            _ddCourseSelect.SelectItem(null);
+        }
+        
+        IsVisible = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public void Hide()
+    {
+        IsVisible = false;
+        StateHasChanged();
+    }
+
+    private void ProjectSelectionChanged(ProbationProject? obj)
+    {
+        if (obj == null)
+        {
+            _editingModel.ProbationProject = null;
+            return;
+        }
+        _editingModel.ProbationProject = new BriefProjectInfo
+        {
+            Id = obj.Id,
+            Title = obj.Title
+        };
+    }
+
+    private void CourseSelectionChanged(ProbationCourse? obj)
+    {
+        if (obj == null)
+        {
+            _editingModel.ProbationCourse = null;
+            return;
+        }
+        _editingModel.ProbationCourse = new BriefCourseInfo()
+        {
+            Id = obj.Id,
+            Title = obj.Title
+        };
+    }
+    
+    private void CopyIntern(Intern from, Intern to)
+    {
+        foreach (var property in _writableProperties)
+        {
+            property.SetValue(to, property.GetValue(from));
+        }
+    }
+}

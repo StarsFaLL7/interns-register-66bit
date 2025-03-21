@@ -1,0 +1,137 @@
+﻿@using ClientApp.Models
+@using ClientApp.Utils
+@using ClientApp.Services.Interfaces
+@using ClientApp.Services.ServiceModels
+@using ClientApp.Components.SmallComponents
+@using ClientApp.Components.SmallComponents.Utility
+@inject IItemService<ProbationCourse> CourseService
+@inject IItemService<Intern> InternService
+
+<div class="modal fade show" id="staticBackdrop" style="display: @(IsVisible ? "block" : "none")" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+     aria-labelledby="staticBackdropLabel" aria-modal="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                @if (ExistingCourse is not null)
+                {
+                    <h1 class="modal-title fs-5">Редактирование направления</h1>
+                }
+                else
+                {
+                    <h1 class="modal-title fs-5">Добавление направления</h1>
+                }
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" @onclick="Hide"></button>
+            </div>
+
+            <div class="modal-body">
+                <form class="container g-3 needs-validation" novalidate>
+                    <div class="row mb-3">
+                        <label for="titleInput" class="form-label">Название <span class="text-danger">*</span></label>
+                        <input @bind="_titleInputValue"
+                               class="form-control @ValidationHelper.ValidateStringNullOrWhitespace(_titleInputValue, _isShouldValidate)"
+                               id="titleInput" placeholder="С# разработчик" required>
+                        <div class="invalid-feedback">
+                            Пожалуйста, укажите название направления.
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <label for="descriptionInput" class="form-label">Описание <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="descriptionInput" rows="6" 
+                            @bind="_descriptionInputValue" placeholder="Описание направления"></textarea>
+                    </div>
+                    <div class="row mb-3">
+                        <MultiDropDown Items="_allInternsDdValues" @ref="_multiDdInterns" Title="Стажеры" 
+                                       CustomToStringFormat="s => s.Value.FullName" />
+                    </div>
+                </form>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" @onclick="Hide">Отмена</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveInfo">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] 
+    public Func<ProbationCourse, Task>? OnSaveAction { get; set; }
+    
+    private MultiDropDown<Intern> _multiDdInterns = null!;
+    private List<DropdownValue<Intern>> _allInternsDdValues = [];
+    private bool _isShouldValidate;
+    
+    private string _titleInputValue = "";
+    private string _descriptionInputValue = "";
+    
+    public ProbationCourse? ExistingCourse { get; set; }
+    public bool IsVisible { get; private set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await InternService.GetAllAsync();
+
+        _allInternsDdValues = response.Item?.Select(i => new DropdownValue<Intern>
+        {
+            Value = i,
+            UniqueId = Guid.NewGuid()
+        }).ToList() ?? [];
+    }
+
+    public async Task ShowAsync(ProbationCourse? course = null)
+    {
+        _isShouldValidate = false;
+        ExistingCourse = course;
+        _titleInputValue = course?.Title ?? "";
+        _descriptionInputValue = course?.Description ?? "";
+        if (course != null && course.Interns != null)
+        {
+            await _multiDdInterns.SelectItemsRangeAsync(_allInternsDdValues.Where(dv => course.Interns.Select(i => i.Id).Contains(dv.Value.Id)).ToArray());
+        }
+        else
+        {
+            await _multiDdInterns.ClearSelectionAsync();
+        }
+        
+        IsVisible = true;
+        StateHasChanged();
+    }
+    
+    private async Task SaveInfo()
+    {
+        _isShouldValidate = true;
+        if (string.IsNullOrWhiteSpace(_titleInputValue))
+        {
+            return;
+        }
+
+        var model = ExistingCourse ?? new ProbationCourse();
+        model.Title = _titleInputValue;
+        model.Description = _descriptionInputValue;
+        model.Interns = _multiDdInterns.SelectedItems.Select(dv => dv.Value).ToList();
+        ServiceActionResult<ProbationCourse> result;
+        if (ExistingCourse == null)
+        {
+            result = await CourseService.CreateAsync(model);
+        }
+        else
+        {
+            result = await CourseService.SaveAsync(model);
+        }
+        
+        if (result.Completed)
+        {
+            ExistingCourse = result.Item;
+            Hide();
+            OnSaveAction?.Invoke(result.Item!);
+        }
+    }
+    
+    public void Hide()
+    {
+        IsVisible = false;
+        StateHasChanged();
+    }
+}

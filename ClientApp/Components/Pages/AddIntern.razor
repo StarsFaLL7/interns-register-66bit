@@ -1,0 +1,118 @@
+﻿@page "/add-intern"
+@using ClientApp.Components.QuestionPopup
+@using ClientApp.Services.Http.Models
+@using ClientApp.Components.SmallComponents
+@using ClientApp.Models
+@using ClientApp.Services.Interfaces
+@using ClientApp.Utils
+@using InternRegister.Controllers.ProbationProjects.Responses
+@using ClientApp.Components.Popups
+
+@inject IItemService<ProbationProject> ProjectService
+@inject IItemService<ProbationCourse> CourseService
+@inject IItemService<Intern> InternService
+
+<EditCoursePopup  @ref="_editCoursePopup" OnSaveAction="CourseEditPopupOnSaveAction"/>
+<EditProjectPopup  @ref="_editProjectPopup" OnSaveAction="ProjectEditPopupOnSaveAction"/>
+<QuestionPopup @ref="_popup"/>
+<div class="container">
+    <div class="row row-cols-auto">
+        <div class="col">
+            <h1>Добавление нового стажера</h1>
+        </div>
+    </div>
+    
+    <div class="row mb-3">
+        <div class="col col-2">
+            <label for="lastNameInput" class="form-label">Фамилия <span class="text-danger">*</span></label>
+            <input type="text" class="form-control @ValidationHelper.ValidateStringNullOrWhitespace(_editingModel.LastName, _isShouldValidate)" 
+                   id="lastNameInput" placeholder="Иванов" @bind="_editingModel.LastName" required>
+            <div class="invalid-feedback">
+                Пожалуйста, укажите фамилию стажера.
+            </div>
+        </div>
+        <div class="col col-2">
+            <label for="firstNameInput" class="form-label">Имя <span class="text-danger">*</span></label>
+            <input type="text" class="form-control @ValidationHelper.ValidateStringNullOrWhitespace(_editingModel.FirstName, _isShouldValidate)" 
+                   id="firstNameInput" placeholder="Олег" @bind="_editingModel.FirstName">
+            <div class="invalid-feedback">
+                Пожалуйста, укажите имя стажера.
+            </div>
+        </div>
+        <div class="col col-2">
+            <DropDown Items="[true, false]" Title="Пол" AddEmptyVariant="false" 
+                      CustomToStringFormat="_genderToStringFormat"
+                      SelectionChangedAction="GenderSelectionChanged"/>
+        </div>
+    </div>
+    
+    <div class="row mb-3">
+        <div class="col col-4">
+            <label for="emailInput" class="form-label">Email <span class="text-danger">*</span></label>
+            <input type="email" class="form-control @ValidationHelper.ValidateEmail(_editingModel.Email, _isShouldValidate)" 
+                   id="emailInput" placeholder="example@mail.com" @bind="_editingModel.Email">
+            <div class="invalid-feedback">
+                Пожалуйста, укажите корректный email стажера.
+            </div>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col col-4">
+            <label for="phoneInput" class="form-label">Телефон</label>
+            <input type="text" class="form-control @ValidationHelper.ValidatePhone(_editingModel.Phone!, _isShouldValidate, true)" 
+                   id="phoneInput" placeholder="+79876543210" @bind="_editingModel.Phone">
+            <div class="invalid-feedback">
+                Пожалуйста, укажите корректный номер телефона. Номер должен начинаться с +7.
+            </div>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col col-4">
+            <label for="dateInput" class="form-label">Дата рождения <span class="text-danger">*</span></label>
+            <input type="date" class="form-control @ValidationHelper.ValidateDateInBetween(_editingModel.BirthDate, 
+                                                    new DateTime(1900, 1, 1), DateTime.Today.AddDays(-1), _isShouldValidate)" 
+                   id="dateInput" placeholder="01.01.2000" @bind="_editingModel.BirthDate">
+            <div class="invalid-feedback">
+                Пожалуйста, укажите корректную дату рождения.
+            </div>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col col-4">
+            <DropDown Items="_allCourses" Title="Направление стажировки" AddEmptyVariant="false" CustomToStringFormat="c => c.Title"
+                      SelectionChangedAction="CourseSelectionChanged" @ref="_ddCourseSelect"/>
+        </div>
+        <div class="col col-2 d-flex align-items-end">
+            <button class="btn btn-sm btn-outline-primary" @onclick="CreateNewCourseBtnClicked">Добавить новое</button>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col col-4">
+            <DropDown Items="_allProjects" Title="Текущий проект" AddEmptyVariant="false" CustomToStringFormat="c => c.Title"
+                      SelectionChangedAction="ProjectSelectionChanged" @ref="_ddProjectSelect"/>
+        </div>
+        <div class="col col-2 d-flex align-items-end">
+            <button class="btn btn-sm btn-outline-primary" @onclick="CreateNewProjectBtnClicked">Добавить новый</button>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col col-auto">
+            <button class="btn btn-success" @onclick="SaveInternBtnClicked">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly Func<bool, string> _genderToStringFormat = b => b ? "Муж." : "Жен.";
+    
+    private QuestionPopup _popup = null!;
+    private EditCoursePopup _editCoursePopup = null!;
+    private DropDown<ProbationCourse> _ddCourseSelect = null!;
+    private List<ProbationCourse> _allCourses = [];
+    private EditProjectPopup _editProjectPopup = null!;
+    private DropDown<ProbationProject> _ddProjectSelect = null!;
+    private List<ProbationProject> _allProjects = [];
+    private bool _isShouldValidate;
+    
+    private Intern _editingModel = new() { BirthDate = DateTime.Today };
+}

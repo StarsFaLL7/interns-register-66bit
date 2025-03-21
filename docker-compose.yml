@@ -1,0 +1,60 @@
+﻿services:
+  interns-postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: internsRegister
+    ports:
+      - "5434:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    networks:
+      - interns-network
+
+  WebApi:
+    image: intern-register-api
+    build:
+      context: .
+      dockerfile: InternRegister/Dockerfile
+    restart: always
+    depends_on:
+      - interns-postgres
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=interns-postgres;Port=5432;Database=internsRegister;Username=postgres;Password=postgres
+      - ASPNETCORE_URLS=http://+:8080;
+    ports:
+      - "8080:8080"
+    networks:
+      - interns-network
+    volumes:
+      - ./publish/apiServer:/app/publish
+
+  ClientApp:
+    image: intern-register-ui
+    build:
+      context: .
+      dockerfile: ClientApp/Dockerfile
+    restart: always
+    depends_on:
+      - WebApi
+    environment:
+      - BackendConfiguration__Host=WebApi
+      - BackendConfiguration__Port=8080
+      - BackendConfiguration__UseHttps=false
+      - BackendConfiguration__DefaultHeaders=[]
+      - ASPNETCORE_URLS=http://+:7200
+    ports:
+      - "7200:7200"
+    networks:
+      - interns-network
+    volumes:
+      - ./publish/blazorApp:/app/publish
+
+networks:
+  interns-network:
+    driver: bridge
+
+volumes:
+  dbdata:

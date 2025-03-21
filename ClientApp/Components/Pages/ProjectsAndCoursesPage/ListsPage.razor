@@ -1,0 +1,197 @@
+﻿@page "/projects-courses"
+@using ClientApp.Components.TableView
+@using ClientApp.Models
+@using ClientApp.Components.QuestionPopup
+@using ClientApp.Services.Interfaces
+@using ClientApp.Services.ServiceModels
+@using ClientApp.Components.SmallComponents
+@using UILayer.Enums
+@using ClientApp.Components.Popups
+@using ClientApp.Utils
+@inject IItemService<ProbationCourse> CourseService
+@inject IItemService<ProbationProject> ProjectService
+
+<QuestionPopup @ref="_popup"/>
+<div class="container">
+    <div class="row">
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <button class="nav-link @(_currentSubTab == SubTab.Courses ? "active" : "")" aria-current="page" @onclick="() => ChangeTab(SubTab.Courses)">Направления</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link @(_currentSubTab == SubTab.Projects ? "active" : "")" @onclick="() => ChangeTab(SubTab.Projects)">Проекты</button>
+            </li>
+        </ul>
+    </div>
+</div>
+@if (_currentSubTab == SubTab.Courses)
+{
+    <EditCoursePopup OnSaveAction="OnCourseSavePopup" @ref="_courseEditPopup"/>
+    <div class="container">
+        <div class="row row-cols-auto mb-3">
+            <div class="col">
+                <h1 class="p-0">Список направлений</h1>
+            </div>
+            <div class="col col-auto d-flex align-items-center">
+                <button class="btn btn-sm btn-success" @onclick="CreateNewCourseBtnClicked">Добавить новое</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col col-auto">
+                <SearchInputComponent Width="250px" Placeholder="Поиск..." OnSearch="SearchOnCourses" @ref="_searchInput"/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <TableView T="ProbationCourse" @ref="_courseTableView"
+                           AddDeleteButton="true"
+                           DeleteButtonClickedCallback="DeleteCourseButtonClicked"
+                           AddEditButton="true"
+                           EditButtonClickedCallback="EditCourseButtonClicked" ReloadRequested="ReloadCoursesTableDataAsync"
+                           SortingOptions="_courseSortingOptions"/>
+            </div>
+        </div>
+    </div>
+}
+else if (_currentSubTab == SubTab.Projects)
+{
+    <EditProjectPopup OnSaveAction="OnProjectSavePopup" @ref="_projectEditPopup"/>
+    <div class="container">
+        <div class="row row-cols-auto mb-3">
+            <div class="col">
+                <h1 class="p-0">Список проектов</h1>
+            </div>
+            <div class="col col-auto d-flex align-items-center">
+                <button class="btn btn-sm btn-success" @onclick="CreateNewProjectBtnClicked">Добавить новый</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col col-auto">
+                <SearchInputComponent Width="250px" Placeholder="Поиск..." OnSearch="SearchOnProjects" @ref="_searchInput"/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <TableView T="ProbationProject" @ref="_projectTableView"
+                           AddDeleteButton="true"
+                           DeleteButtonClickedCallback="DeleteProjectButtonClicked"
+                           AddEditButton="true"
+                           EditButtonClickedCallback="EditProjectButtonClicked" ReloadRequested="ReloadProjectsTableDataAsync"
+                           SortingOptions="_projectSortingOptions"/>
+            </div>
+        </div>
+    </div>
+}
+
+
+
+@code {
+    private QuestionPopup _popup = null!;
+    private SearchInputComponent _searchInput = null!;
+    private EditCoursePopup _courseEditPopup = null!;
+    private TableView<ProbationCourse> _courseTableView = null!;
+    
+    private EditProjectPopup _projectEditPopup = null!;
+    private TableView<ProbationProject> _projectTableView = null!;
+    
+    private SubTab _currentSubTab = SubTab.Courses;
+    private bool _tabChanged;
+
+    private int _queryItemsPerPage;
+    private string _querySearch = "";
+    private string _queryOrderBy = "";
+    private bool _querySortAscending;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQueryParameters();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender || _tabChanged)
+        {
+            ApplyQueryParametersToTable();
+            if (_currentSubTab == SubTab.Courses)
+            {
+                await ReloadCoursesTableDataAsync(true);
+            }
+            else if (_currentSubTab == SubTab.Projects)
+            {
+                await ReloadProjectsTableDataAsync(true);
+            }
+
+            _tabChanged = false;
+        }
+    }
+    
+    private Task LoadQueryParameters()
+    {
+        var queryParams = QueryParser.ParseQueryParameters(NavigationManager);
+        _currentSubTab = queryParams.TryGetValue("tab", out var tabStr) && int.TryParse(tabStr, out var tab) && tab is >= 0 and < 2
+            ? (SubTab)tab : SubTab.Courses;
+        if (queryParams.TryGetValue("search", out var searchStr))
+        {
+            _querySearch = searchStr;
+        }
+        _queryItemsPerPage = queryParams.TryGetValue("itemsPerPage", out var itemsPerPageStr) && 
+                             int.TryParse(itemsPerPageStr, out var itemsPerPageNum) &&
+                             new[] { 3, 5,10,25,50 }.Contains(itemsPerPageNum)
+            ? itemsPerPageNum : 10;
+        queryParams.TryGetValue("orderBy", out _queryOrderBy!);
+        queryParams.TryGetValue("ascending", out var sortAscStr);
+        bool.TryParse(sortAscStr, out _querySortAscending);
+        
+        return Task.CompletedTask;
+    }
+
+    private void SaveQueryParameters()
+    {
+        var queries = new Dictionary<string, object?>()
+        {
+            { "tab", (int)_currentSubTab }
+        };
+        queries["search"] = _searchInput.Text;
+        
+        if (!_tabChanged)
+        {
+            queries["itemsPerPage"] = _currentSubTab == SubTab.Courses ? _courseTableView.ItemsPerPage : _projectTableView.ItemsPerPage;
+            queries["orderBy"] = _currentSubTab == SubTab.Courses ? _courseTableView.SelectedSortedOption!.PropertyName : _projectTableView.SelectedSortedOption!.PropertyName;
+            queries["ascending"] = _currentSubTab == SubTab.Courses ? !_courseTableView.SelectedSortedOption!.ByDescending : !_projectTableView.SelectedSortedOption!.ByDescending;
+        }
+        
+        var uri = NavigationManager.GetUriWithQueryParameters(queries);
+        
+        NavigationManager.NavigateTo(uri);
+    }
+    
+    private void ApplyQueryParametersToTable()
+    {
+        _searchInput.Text = _querySearch;
+        _searchInput.Reload();
+        if (_currentSubTab == SubTab.Courses)
+        {
+            _courseTableView.ItemsPerPage = _queryItemsPerPage;
+            _courseTableView.SelectSoringOptionByPropertyName(_queryOrderBy, !_querySortAscending);
+        }
+        else if (_currentSubTab == SubTab.Projects)
+        {
+            _projectTableView.ItemsPerPage = _queryItemsPerPage;
+            _projectTableView.SelectSoringOptionByPropertyName(_queryOrderBy, !_querySortAscending);
+        }
+    }
+    
+    private enum SubTab
+    {
+        Courses = 0,
+        Projects = 1
+    }
+
+    private Task ChangeTab(SubTab subTab)
+    {
+        _currentSubTab = subTab;
+        _tabChanged = true;
+        SaveQueryParameters();
+        return Task.CompletedTask;
+    }
+}

@@ -1,0 +1,136 @@
+﻿@using UILayer.Enums
+
+<div class="modal fade show" id="staticBackdrop" style="@GetDisplay; z-index: @ZIndex" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+     aria-labelledby="staticBackdropLabel" aria-modal="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="staticBackdropLabel">@Title</h1>
+                @if (_addCancelCross)
+                {
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" @onclick="() => Answer(PopupAnswer.Cancel)"></button>
+                }
+            </div>
+            
+            <div class="modal-body">
+                @if (_useMarkup)
+                {
+                    @((MarkupString)BodyText)
+                }
+                else
+                {
+                    @(BodyText)
+                }
+            </div>
+            
+            <div class="modal-footer">
+                @if (_useButtons is PopupButtons.OkCancel or PopupButtons.YesCancel or PopupButtons.YesNoCancel or PopupButtons.Cancel)
+                {
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => Answer(PopupAnswer.Cancel)" data-bs-dismiss="modal">Отмена</button>
+                }
+                @if (_useButtons is PopupButtons.YesNo or PopupButtons.YesNoCancel)
+                {
+                    <button type="button" class="btn btn-outline-danger" @onclick="() => Answer(PopupAnswer.No)" data-bs-dismiss="modal">Нет</button>
+                }
+                @if (_useButtons is PopupButtons.YesNo or PopupButtons.YesCancel or PopupButtons.YesNoCancel)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="() => Answer(PopupAnswer.Yes)">Да</button>
+                }
+                @if (_useButtons is PopupButtons.Ok or PopupButtons.OkCancel)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="() => Answer(PopupAnswer.Ok)" data-bs-dismiss="modal">Ок</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@code 
+{
+    [Parameter] 
+    public int ZIndex { get; set; } = 10;
+    
+    private string GetDisplay => IsVisible ? "display: block" : "display: none";
+    
+    private bool _useMarkup;
+    private bool _useCallbackWithObject = false;
+    private PopupButtons _useButtons;
+    private bool _addCancelCross;
+    private Func<PopupAnswer, object, Task>? _onAnsweredObject = null!;
+    private Func<PopupAnswer, Task>? _onAnswered = null!;
+    
+    public bool IsVisible { get; private set; }
+    public string Title { get; private set; } = "";
+    public string BodyText { get; private set; } = "";
+    public object? ObjectValue { get; private set; }
+    
+    private void Answer(PopupAnswer answer)
+    {
+        if (_useCallbackWithObject)
+        {
+            _onAnsweredObject?.Invoke(answer, ObjectValue!);
+        }
+        else
+        {
+            _onAnswered?.Invoke(answer);
+        }
+        Hide();
+    }
+
+    public void ShowWithObject<T>(string title, string bodyText, T obj,  Func<PopupAnswer, T, Task> callback, bool useMarkup = false, 
+        PopupButtons buttons = PopupButtons.YesNo, bool addCancelCross = true)
+    {
+        _useMarkup = useMarkup;
+        ObjectValue = obj;
+        _onAnsweredObject = (ans, usedObj) => callback(ans, (T)usedObj);
+        _useCallbackWithObject = true;
+        Title = title;
+        BodyText = bodyText.Replace("\n", "<br>");
+        IsVisible = true;
+        _addCancelCross = addCancelCross;
+        _useButtons = buttons;
+        StateHasChanged();
+    }
+    
+    public void Show(string title, string bodyText, bool useMarkup = false, Func<PopupAnswer, Task>? callback = null, 
+        PopupButtons buttons = PopupButtons.YesNo, bool addCancelCross = true)
+    {
+        _useMarkup = useMarkup;
+        ObjectValue = null;
+        _onAnswered = callback;
+        _useCallbackWithObject = false;
+        Title = title;
+        BodyText = bodyText.Replace("\n", "<br>");
+        IsVisible = true;
+        _addCancelCross = addCancelCross;
+        _useButtons = buttons;
+        StateHasChanged();
+    }
+
+    public void ShowSuccess(string bodyText)
+    {
+        Show("Успешно", bodyText, false, null, PopupButtons.Ok);
+    }
+    
+    public void ShowError(string bodyText)
+    {
+        Show("Ошибка", bodyText, false, null, PopupButtons.Ok);
+    }
+    
+    public void ShowError(Exception e)
+    {
+        Show("Ошибка", $"Произошла ошибка: {e.Message}.", false, null, PopupButtons.Ok);
+    }
+    
+    public void Hide()
+    {
+        IsVisible = false;
+        StateHasChanged();
+    }
+
+    public void ShowConnectionError()
+    {
+        Show("Ошибка", "Не удалось получить ответ от сервера.", false, null, PopupButtons.Ok);
+    }
+}

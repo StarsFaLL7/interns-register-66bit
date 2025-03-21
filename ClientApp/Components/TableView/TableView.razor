@@ -1,0 +1,124 @@
+﻿@using ClientApp.Components.SmallComponents
+@typeparam T
+
+<DropDown Items="SortingOptions.ToList()" Title="Сортировка" SelectionChangedAction="SortDropDownChanged" IsAutoWidth="true" @ref="_ddSortingOption"/>
+<div class="tableView">
+    <div class="table-header">
+        @foreach (var prop in DisplayProperties)
+        {
+            var attribute = GetAttributeOrDefault(prop)!;
+            <div class="header-cell"
+                 style="min-width: @(attribute.MinWidthPx)px; max-width: @(attribute.MaxWidthPx)px; width: @(attribute.PercentWidth)%; ">
+                <div class="header-inner">
+                    @(attribute.DisplayName)
+                </div>
+            </div>
+        }
+            
+        @if (AddEditButton || AddDeleteButton)
+        {
+            <div class="table-cell table-cell-mini" style="opacity: 0; display: flex; column-gap: 8px; width: @(AddEditButton && AddDeleteButton ? 112 : 56)px">
+            </div>
+        }
+    </div>
+    @if (DisplayItemsList.Length == 0)
+    {
+        <div class="text-center text-secondary" style="padding-top: 40px">
+            <p>Подходящие элементы не найдены. Попробуйте изменить запрос.</p>
+        </div>
+    }
+    @foreach (var obj in DisplayItemsList)
+    {
+        <div class="table-row">
+            @foreach (var prop in DisplayProperties)
+            {
+                var attr = GetAttributeOrDefault(prop)!;
+                var value = prop.GetValue(obj)!;
+                <div class="table-cell"
+                     style="min-width: @(attr.MinWidthPx)px; max-width: @(attr.MaxWidthPx)px; width: @(attr.PercentWidth)%; ">
+                    @if (attr.IsHtmlCode)
+                    {
+                        @((MarkupString)value)
+                    }
+                    else
+                    {
+                        <p class="p-0 m-0" title="@(attr.IsHtmlCode ? "" : value)">
+                            @value
+                        </p>
+                    }
+                </div>
+            }
+            @if (AddEditButton || AddDeleteButton)
+            {
+                <div class="table-cell table-cell-mini" style="display: flex; column-gap: 8px; align-items: center">
+                    @if (AddEditButton)
+                    {
+                        <button class="form-control p-0"><img src="images/icon-edit.png" alt="Ред." class="in-table-btn" 
+                                                              @onclick="() => EditButtonClicked(obj)" title="Редактировать"/>
+                        </button>
+                    }
+                    @if (AddDeleteButton)
+                    {
+                        <button class="form-control p-0"><img src="images/icon-delete-24px.svg" alt="Удал." class="in-table-btn col" 
+                                                              @onclick="() => DeleteButtonClicked(obj)" title="Удалить"/>
+                        </button>
+                    }
+                </div>
+            }
+
+        </div>
+    }
+    <div class="table-footer">
+        <div class="row">
+            <div class="col col-auto">
+                <p>Отображаются элементы с @(CurrentPage * ItemsPerPage + 1) по @(Math.Min((CurrentPage + 1) * ItemsPerPage, TotalItemsCount)) из @TotalItemsCount</p>
+            </div>
+            <div class="col col-auto d-flex align-items-center">
+                <p class="p-0 m-0 form-label">Элементов на странице: </p>
+            </div>
+            <div class="col col-auto" style="margin-right: 15px">
+                <DropDown Items="[3, 5, 10, 25, 50]" IsAutoWidth="true" SelectionChangedAction="ItemsPerPageDdValueChanged" @ref="_ddItemsPerPage"/>
+            </div>
+            <div class="col col-auto d-flex align-items-center">
+                <p class="p-0 m-0 form-label">Перейти на страницу: </p>
+            </div>
+            <div class="col col-auto">
+                <input type="number" placeholder="1" min="1" max="@_lastPage" class="form-control" @onchange="GoToPageInputChanged"/>
+            </div>
+        </div>
+            
+        <div class="page-buttons">
+            <img src="images/icon-double-arrow-left.png" alt="Первая страница" class="page-arrow-btn" @onclick="FirstPage"/>
+            <img src="images/icon-arrow-left.png" alt="Предыдущая страница" class="page-arrow-btn" style="margin-right: 8px" @onclick="PreviousPage"/>
+            @{
+                var startIndex = Math.Max(1, CurrentPage);
+                var endIndex = Math.Min(_totalPagesCount, CurrentPage + 2);
+                if (CurrentPage < 2)
+                {
+                    endIndex = Math.Min(_totalPagesCount, 3);
+                }
+                if (_totalPagesCount - CurrentPage < 2)
+                {
+                    startIndex = Math.Max(1, _totalPagesCount - 2);
+                }
+                    
+
+                for (var i = startIndex; i <= endIndex; i++)
+                {
+                    var i1 = i;
+                    <button class="page-button @(CurrentPage == i1 - 1 ? "active" : "")" @onclick="() => SelectPage(i1 - 1)">@i</button>
+                }
+            }
+            <img src="images/icon-arrow-right.png" alt="Следующая страница" class="page-arrow-btn" style="margin-left: 8px" @onclick="NextPage"/>
+            <img src="images/icon-double-arrow-right.png" alt="Последняя страница" class="page-arrow-btn" @onclick="LastPage"/>
+        </div>
+    </div>
+</div>
+
+@code
+{
+    private DropDown<int> _ddItemsPerPage = null!;
+    private DropDown<TableSortingOption<T>> _ddSortingOption = null!;
+    
+    
+}

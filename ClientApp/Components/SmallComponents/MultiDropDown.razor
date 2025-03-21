@@ -1,0 +1,191 @@
+﻿@using ClientApp.Components.SmallComponents.Utility
+
+@typeparam T
+@inject IJSRuntime Js
+
+<div class="mb-3">
+    @if (!string.IsNullOrWhiteSpace(Title))
+    {
+        <label for="@(_guid.ToString())" class="form-label">@Title</label>
+    }
+    <select class="form-select multiselect" style="@GetStyleForSelect()" disabled="@IsReadOnly" id="@(_guid.ToString())" multiple>
+        @foreach (var itemPair in _itemsDict)
+        {
+            @if (CustomToStringFormat is not null)
+            {
+                <option value="@itemPair.Key">@CustomToStringFormat(itemPair.Value)</option>
+            }
+            else
+            {
+                <option value="@itemPair.Key">@itemPair.Value.ToString()</option>
+            }
+        }
+    </select>
+</div>
+
+<script>
+    $(document).ready(function() {
+        $('.multiselect').select2({
+            theme: "bootstrap-5",
+            language: "ru",
+            placeholder: 'Выберите вариант(ы)'});
+    });
+</script>
+
+@code
+{
+    [Parameter] public bool IsReadOnly { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public Action<DropdownValue<T>>? ItemSelectedAction { get; set; }
+    [Parameter] public Action<DropdownValue<T>>? ItemUnselectedAction { get; set; }
+    [Parameter] public Action<DropdownValue<T>[]>? SelectionChangedAction { get; set; }
+    [Parameter] public DropdownValue<T>[]? InitialSelectedItems { get; set; }
+    [Parameter] public Func<DropdownValue<T>, string>? CustomToStringFormat { get; set; }
+    [Parameter] public bool IsAutoWidth { get; set; }
+    [Parameter] [EditorRequired] public List<DropdownValue<T>?> Items { get; set; } = [];
+    
+    public HashSet<DropdownValue<T>> SelectedItems { get; } = [];
+    
+    private readonly Guid _guid = Guid.NewGuid();
+    private Dictionary<Guid, DropdownValue<T>> _itemsDict = null!;
+    private Dictionary<DropdownValue<T>, Guid> _itemsDictReversed = null!;
+    private DotNetObjectReference<MultiDropDown<T>> _dotNetObjectReference = null!;
+    
+    protected override Task OnInitializedAsync()
+    {
+        _itemsDictReversed = new Dictionary<DropdownValue<T>, Guid>();
+        _itemsDict = new Dictionary<Guid, DropdownValue<T>>();
+        foreach (var item in Items)
+        {
+            if (item == null)
+            {
+                continue;
+            }
+            _itemsDictReversed[item] = item.UniqueId;
+            _itemsDict[item.UniqueId] = item;
+        }
+        _dotNetObjectReference = DotNetObjectReference.Create(this);
+        return Task.CompletedTask;
+    }
+
+    private string GetStyleForSelect()
+    {
+        return IsAutoWidth ? "width: auto" : "";
+    }
+    
+    public void AddNewItem(DropdownValue<T> item)
+    {
+        Items.Add(item);
+        _itemsDict.Add(item.UniqueId, item);
+        _itemsDictReversed.Add(item, item.UniqueId);
+        StateHasChanged();
+    }
+    
+    protected override Task OnParametersSetAsync()
+    {
+        _itemsDictReversed = new Dictionary<DropdownValue<T>, Guid>();
+        _itemsDict = new Dictionary<Guid, DropdownValue<T>>();
+        foreach (var item in Items)
+        {
+            if (item == null)
+            {
+                continue;
+            }
+            _itemsDictReversed[item] = item.UniqueId;
+            _itemsDict[item.UniqueId] = item;
+        }
+        StateHasChanged();
+        
+        if (InitialSelectedItems is not null)
+        {
+            foreach (var item in InitialSelectedItems.Where(i => _itemsDictReversed.ContainsKey(i)))
+            {
+                SelectedItems.Add(item);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Js.InvokeVoidAsync("MultiDropdown.InitMultiDropdown", _dotNetObjectReference, _guid);
+        }
+    }
+
+    public bool IsItemSelected(DropdownValue<T> item)
+    {
+        return SelectedItems.Contains(item);
+    }
+
+    [JSInvokable("SelectItemInternal")]
+    public void SelectItemInternal(Guid id)
+    {
+        if (!_itemsDict.TryGetValue(id, out var item))
+        {
+            return;
+        }
+        ItemSelectedAction?.Invoke(item);
+        SelectedItems.Add(item);
+        SelectionChangedAction?.Invoke(SelectedItems.ToArray());
+    }
+    
+    [JSInvokable("UnselectItemInternal")]
+    public void UnselectItemInternal(Guid id)
+    {
+        if (!_itemsDict.TryGetValue(id, out var item))
+        {
+            return;
+        }
+
+        ItemUnselectedAction?.Invoke(item);
+        SelectedItems.Remove(item);
+        SelectionChangedAction?.Invoke(SelectedItems.ToArray());
+    }
+    
+    public async void SelectItem(DropdownValue<T> item, bool triggerEvent = false)
+    {
+        if (_itemsDictReversed.TryGetValue(item, out var guid))
+        {
+            await Js.InvokeVoidAsync("MultiDropdown.SelectItem", _guid, guid);
+            SelectedItems.Add(item);
+            if (triggerEvent)
+            {
+                ItemSelectedAction?.Invoke(item);
+                SelectionChangedAction?.Invoke(SelectedItems.ToArray());
+            }
+            StateHasChanged();
+        }
+    }
+
+    public async Task SelectItemsRangeAsync(params DropdownValue<T>[] items)
+    {
+        if (items.Length == 0)
+        {
+            await ClearSelectionAsync();
+            return;
+        }
+
+        var guids = items
+            .Where(item => item != null && _itemsDict.ContainsKey(item.UniqueId))
+            .Select(item => item.UniqueId)
+            .ToArray();
+        await Js.InvokeVoidAsync("MultiDropdown.SelectItemsRange", _guid, guids);
+        
+        SelectedItems.Clear();
+        foreach (var item in items)
+        {
+            SelectedItems.Add(item);
+        }
+        StateHasChanged();
+    }
+    
+    public async Task ClearSelectionAsync()
+    {
+        await Js.InvokeVoidAsync("MultiDropdown.Clear", _guid);
+        SelectedItems.Clear();
+        StateHasChanged();
+    }
+}
